@@ -1,4 +1,4 @@
-# troute-dfda
+# troute-usgsdf
 
 Builds a USGS streamflow dataframe shaped to fill
 [t-route](https://github.com/NOAA-OWP/t-route)'s
@@ -28,13 +28,13 @@ and output path are all derived automatically
 (`<dir>/config/*.gpkg`, `<dir>/config/troute.yaml`, `<dir>/config/troute_da.feather`):
 
 ```bash
-troute-dfda --ngiab-data-dir /path/to/ngiab/output
+uvx troute-usgsdf --ngiab-data-dir /path/to/ngiab/output
 ```
 
 Or point at the three paths explicitly:
 
 ```bash
-troute-dfda \
+uvx troute-usgsdf \
   --gpkg /path/to/domain.gpkg \
   --troute-config /path/to/troute.yaml \
   --output /path/to/troute_da.feather
