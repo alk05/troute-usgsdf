@@ -1,0 +1,22 @@
+[project]
+name = "troute_usgsdf"
+version = "0.1.0"
+description = "Build a USGS streamflow data-assimilation dataframe for t-route from NGIAB run outputs"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "pandas>=2, <3",
+    "pyyaml>=6",
+    "hydrotools.waterdata_client",
+]
+
+[project.scripts]
+troute-usgsdf = "troute_usgsdf.cli:run"
+makedf = "troute_usgsdf.cli:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/troute_usgsdf"]
