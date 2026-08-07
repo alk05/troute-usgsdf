@@ -40,6 +40,17 @@ uvx troute-usgsdf \
   --output /path/to/troute_da.feather
 ```
 
+To generate the dataframe using a RouteLink `.nc` file and emit NWM link ids
+instead of the original flowpath ids, add `--route-link`:
+
+```bash
+uvx troute-usgsdf \
+  --gpkg /path/to/domain.gpkg \
+  --troute-config /path/to/troute.yaml \
+  --output /path/to/troute_da.feather \
+  --route-link /path/to/RouteLink.nc
+```
+
 The simulation start/end/timestep are read from `troute.yaml`
 (`compute_parameters.restart_parameters.start_datetime`, and
 `compute_parameters.forcing_parameters.dt`/`nts`).
