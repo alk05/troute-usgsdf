@@ -44,6 +44,13 @@ def main(
         dir_okay=False,
         help="Path to write the output feather file.",
     ),
+    route_link: Optional[Path] = typer.Option(
+        None,
+        "--route-link",
+        exists=True,
+        dir_okay=False,
+        help="Optional RouteLink .nc file containing NWM link ids.",
+    ),
 ) -> None:
     """Build a USGS streamflow data-assimilation dataframe for t-route."""
     if ngiab_data_dir is not None:
@@ -70,8 +77,14 @@ def main(
     typer.echo(f"gpkg: {gpkg}")
     typer.echo(f"troute config: {troute_config}")
     typer.echo(f"output: {output}")
+    typer.echo(f"route link: {route_link}")
 
-    df = build_usgs_da_dataframe(gpkg, troute_config, output)
+    df = build_usgs_da_dataframe(
+        gpkg,
+        troute_config,
+        output,
+        route_link_nc_path=route_link,
+    )
     typer.echo(df)
 
 

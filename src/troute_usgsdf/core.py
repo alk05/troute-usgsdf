@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from .config import read_troute_window
-from .gpkg import read_gage_crosswalk
+from .gpkg import read_gage_crosswalk, read_gage_crosswalk_nwm
 from .usgs import fetch_usgs_streamflow, interpolate_to_grid
 
 # fetch a day of padding on each side of the simulation window so the
@@ -48,6 +48,7 @@ def build_usgs_da_dataframe(
     gpkg_path: Path,
     troute_config_path: Path,
     output_path: Path,
+    route_link_nc_path: Path | None = None,
 ) -> pd.DataFrame:
     """Build a waterbody-id x time dataframe of USGS streamflow (m3/s) and write it to `output_path`.
 
@@ -59,7 +60,15 @@ def build_usgs_da_dataframe(
         window.start, window.end, freq=pd.Timedelta(seconds=window.dt)
     )
 
-    wb_to_gage = read_gage_crosswalk(gpkg_path)
+    if route_link_nc_path is not None:
+        wb_to_gage = read_gage_crosswalk_nwm(gpkg_path, route_link_nc_path)
+        required_wb_ids = {
+            nwm for _gage, nwm in wb_to_gage.values() if nwm is not None
+        }
+    else:
+        wb_to_gage = read_gage_crosswalk(gpkg_path)
+        required_wb_ids = set(wb_to_gage)
+
     output_path = Path(output_path)
 
     if output_path.exists():
@@ -69,16 +78,31 @@ def build_usgs_da_dataframe(
             print(f"Could not read existing {output_path} ({e}); refetching")
             cached = None
         if cached is not None:
-            reason = _incompleteness_reason(cached, set(wb_to_gage), target_index)
-            if reason is None:
+            is_all_nan = cached.isna().all(axis=None)
+            if is_all_nan:
                 print(
-                    f"{output_path} already covers {window.start} to {window.end} "
-                    "for all required waterbody ids; skipping USGS fetch"
+                    f"{output_path} contains only NaNs; refetching USGS data"
                 )
-                return cached
-            print(f"{output_path} exists but is incomplete ({reason}); fetching from USGS")
+            else:
+                reason = _incompleteness_reason(cached, required_wb_ids, target_index)
+                if reason is None:
+                    print(
+                        f"{output_path} already covers {window.start} to {window.end} "
+                        "for all required waterbody ids; skipping USGS fetch"
+                    )
+                    return cached
+                print(f"{output_path} exists but is incomplete ({reason}); fetching from USGS")
 
-    sites = sorted({f"USGS-{gage}" for gage in wb_to_gage.values()})
+    if route_link_nc_path is not None:
+        sites = sorted(
+            {
+                f"USGS-{gage}"
+                for gage, nwm in wb_to_gage.values()
+                if gage and nwm is not None
+            }
+        )
+    else:
+        sites = sorted({f"USGS-{gage}" for gage in wb_to_gage.values()})
 
     observations = fetch_usgs_streamflow(sites, window.start - PAD, window.end + PAD)
 
@@ -87,7 +111,16 @@ def build_usgs_da_dataframe(
         for site, group in observations.groupby("usgs_site_code")
     }
     empty = pd.Series(index=target_index, dtype="float64")
-    rows = {wb: by_gage.get(gage, empty) for wb, gage in wb_to_gage.items()}
+    if route_link_nc_path is not None:
+        rows = {
+            nwm: by_gage.get(gage, empty)
+            for wb, (gage, nwm) in sorted(
+                wb_to_gage.items(), key=lambda item: (item[1][1] is None, item[1][1])
+            )
+            if nwm is not None
+        }
+    else:
+        rows = {wb: by_gage.get(gage, empty) for wb, gage in wb_to_gage.items()}
 
     usgs_df = pd.DataFrame(rows).T.astype("float32")
     usgs_df.columns = target_index
