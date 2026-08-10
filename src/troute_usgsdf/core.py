@@ -125,6 +125,9 @@ def build_usgs_da_dataframe(
     usgs_df = pd.DataFrame(rows).T.astype("float32")
     usgs_df.columns = target_index
 
+    if usgs_df.shape[1] > 2:
+        usgs_df.iloc[:, 2:] = float("nan")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     usgs_df.to_feather(output_path)
 
