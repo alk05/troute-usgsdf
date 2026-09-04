@@ -13,6 +13,31 @@ class TrouteWindow:
     end: datetime
     dt: int  # forcing/routing timestep, in seconds
 
+def make_troute_window(
+    start: datetime | str,
+    *,
+    dt: int = 300,
+    end: datetime | str | None = None,
+    nts: int | None = None,
+) -> TrouteWindow:
+    """Build a TrouteWindow without a yaml.
+    Requires `start` and either `end` or `nts`.
+    `dt` defaults to 300 seconds.
+    """
+    if isinstance(start, str):
+        start = datetime.fromisoformat(start)
+
+    if end is not None:
+        if isinstance(end, str):
+            end = datetime.fromisoformat(end)
+    elif nts is not None:
+        end = start + timedelta(seconds=dt * nts)
+    else:
+        raise ValueError("Must provide either 'end' or 'nts' along with 'start'")
+
+    return TrouteWindow(start=start, end=end, dt=dt)
+
+
 
 def read_troute_window(troute_config_path: Path) -> TrouteWindow:
     """Read the simulation start/end/timestep out of a troute.yaml.
