@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 import pandas as pd
 from hydrotools.waterdata_client import ContinuousClient
@@ -15,7 +16,7 @@ CFS_TO_CMS = 0.0283168
 
 def fetch_usgs_streamflow(sites: list[str], start_time, end_time) -> pd.DataFrame:
     """Fetch 00060 streamflow for many sites at once, batched under the row cap."""
-    client = ContinuousClient(transformer=to_dataframe)
+    client = ContinuousClient(transformer=to_dataframe, api_key=os.getenv("USGS_API_KEY"))
     frames = []
     for i in range(0, len(sites), BATCH_SIZE):
         batch = sites[i : i + BATCH_SIZE]
