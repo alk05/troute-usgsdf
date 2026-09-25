@@ -144,8 +144,13 @@ def build_usgs_da_dataframe(
 
     sites = sorted({f"USGS-{gage}" for gage in id_to_gage.values() if gage})
 
+    if 0 < observed_steps < len(target_index):
+        fetch_end = min(target_index[observed_steps - 1] + pad_delta, window.end + pad_delta)
+    else:
+        fetch_end = window.end + pad_delta
+
     observations = (
-        fetch_usgs_streamflow(sites, window.start - pad_delta, window.end + pad_delta)
+        fetch_usgs_streamflow(sites, window.start - pad_delta, fetch_end)
         if sites
         else pd.DataFrame(columns=["usgs_site_code"])
     )
