@@ -9,9 +9,9 @@ from .gpkg import read_gage_crosswalk, read_gage_crosswalk_nwm
 from .routelink import read_gage_crosswalk_route_link, read_link_mask
 from .usgs import fetch_usgs_streamflow, interpolate_to_grid
 
-# fetch a day of padding on each side of the simulation window so the
+# fetch padding on each side of the simulation window so the
 # grid edges can be interpolated rather than extrapolated
-PAD = pd.Timedelta(days=1)
+PAD = pd.Timedelta(hours=3)
 
 
 def _incompleteness_reason(
@@ -86,12 +86,26 @@ def build_usgs_da_dataframe(
     troute_config_path: Path | None = None,
     window: TrouteWindow | None = None,
     observed_steps: int = 2,
+    pad_hours: float | None = None,
+    pad: pd.Timedelta | None = None,
 ) -> pd.DataFrame:
     """Build a waterbody-id x time dataframe of USGS streamflow (m3/s) and write it to `output_path`.
 
     The time grid and window are taken from `troute_config_path` (start_datetime,
     forcing dt/nts); gage locations are crosswalked from `gpkg_path`.
     """
+    if pad_hours is not None:
+        pad_delta = pd.Timedelta(hours=pad_hours)
+    elif pad is not None:
+        if isinstance(pad, (int, float)):
+            pad_delta = pd.Timedelta(hours=pad)
+        elif isinstance(pad, pd.Timedelta):
+            pad_delta = pad
+        else:
+            pad_delta = pd.Timedelta(pad)
+    else:
+        pad_delta = PAD
+
     if window is None:
         if troute_config_path is None:
             raise ValueError("Must provide either troute_config_path or window")
@@ -131,7 +145,7 @@ def build_usgs_da_dataframe(
     sites = sorted({f"USGS-{gage}" for gage in id_to_gage.values() if gage})
 
     observations = (
-        fetch_usgs_streamflow(sites, window.start - PAD, window.end + PAD)
+        fetch_usgs_streamflow(sites, window.start - pad_delta, window.end + pad_delta)
         if sites
         else pd.DataFrame(columns=["usgs_site_code"])
     )
