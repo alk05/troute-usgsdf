@@ -83,9 +83,17 @@ def main(
         2,
         "--observed-steps",
         help=(
-            "Number of time steps to keep populated with observations before NaN truncation"
-            "(default: 2, which corresponds to five minutes)."
+            "Number of time steps to keep populated with observations before NaN truncation "
+            "(default: 2, which corresponds to five minutes). "
             "Pass 0 to keep the full window."
+        ),
+    ),
+    mask_initial_step: bool = typer.Option(
+        True,
+        "--mask-initial-step/--no-mask-initial-step",
+        help=(
+            "Mask the initial time step (index 0) to NaN so that only subsequent "
+            "step(s) contain observations (default: True)."
         ),
     ),
     pad_hours: float = typer.Option(
@@ -152,6 +160,7 @@ def main(
     typer.echo(f"window: {window.start} to {window.end} (dt={window.dt}s)")
     typer.echo(f"output: {output}")
     typer.echo(f"observed steps: {observed_steps}")
+    typer.echo(f"mask initial step: {mask_initial_step}")
     typer.echo(f"pad hours: {pad_hours}")
 
     df = build_usgs_da_dataframe(
@@ -161,6 +170,7 @@ def main(
         mask_path=mask,
         window=window,
         observed_steps=observed_steps,
+        mask_initial_step=mask_initial_step,
         pad_hours=pad_hours,
     )
     typer.echo(df)

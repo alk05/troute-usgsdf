@@ -86,13 +86,17 @@ def build_usgs_da_dataframe(
     troute_config_path: Path | None = None,
     window: TrouteWindow | None = None,
     observed_steps: int = 2,
+    mask_initial_step: bool = True,
     pad_hours: float | None = None,
     pad: pd.Timedelta | None = None,
 ) -> pd.DataFrame:
     """Build a waterbody-id x time dataframe of USGS streamflow (m3/s) and write it to `output_path`.
 
     The time grid and window are taken from `troute_config_path` (start_datetime,
-    forcing dt/nts); gage locations are crosswalked from `gpkg_path`.
+    forcing dt/nts); gage locations are crosswalked from `gpkg_path` or `route_link_nc_path`.
+
+    By default, `observed_steps=2` and `mask_initial_step=True`, meaning only the second
+    column (index 1) has values; index 0 and all columns following index 1 are NaN.
     """
     if pad_hours is not None:
         pad_delta = pd.Timedelta(hours=pad_hours)
@@ -168,6 +172,9 @@ def build_usgs_da_dataframe(
 
     if observed_steps > 0 and usgs_df.shape[1] > observed_steps:
         usgs_df.iloc[:, observed_steps:] = float("nan")
+
+    if mask_initial_step and usgs_df.shape[1] > 0:
+        usgs_df.iloc[:, 0] = float("nan")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     usgs_df.to_feather(output_path)
