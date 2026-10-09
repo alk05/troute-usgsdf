@@ -12,6 +12,8 @@ from .usgs import fetch_usgs_streamflow, interpolate_to_grid
 # fetch padding on each side of the simulation window so the
 # grid edges can be interpolated rather than extrapolated
 PAD = pd.Timedelta(hours=3)
+# data assimilation lookback window before simulation start
+LOOKBACK = pd.Timedelta(hours=1)
 
 
 def _incompleteness_reason(
@@ -88,11 +90,17 @@ def build_usgs_da_dataframe(
     observed_steps: int = 2,
     pad_hours: float | None = None,
     pad: pd.Timedelta | None = None,
+    lookback_hours: float | None = None,
+    lookback: pd.Timedelta | None = None,
 ) -> pd.DataFrame:
     """Build a waterbody-id x time dataframe of USGS streamflow (m3/s) and write it to `output_path`.
 
-    The time grid and window are taken from `troute_config_path` (start_datetime,
-    forcing dt/nts); gage locations are crosswalked from `gpkg_path`.
+    The time grid begins at `window.start - lookback` and ends at `window.end`, with timestep
+    `window.dt`. Gage locations are crosswalked from `gpkg_path` or `route_link_nc_path`.
+
+    Observations are populated from the lookback start time through `observed_steps` timesteps
+    from `window.start` (default: 2, meaning start and start + dt). Any subsequent timesteps
+    in the forecast window are filled with NaN. Pass `observed_steps=0` to keep the full window.
     """
     if pad_hours is not None:
         pad_delta = pd.Timedelta(hours=pad_hours)
@@ -106,13 +114,29 @@ def build_usgs_da_dataframe(
     else:
         pad_delta = PAD
 
+    if lookback_hours is not None:
+        lookback_delta = pd.Timedelta(hours=lookback_hours)
+    elif lookback is not None:
+        if isinstance(lookback, (int, float)):
+            lookback_delta = pd.Timedelta(hours=lookback)
+        elif isinstance(lookback, pd.Timedelta):
+            lookback_delta = lookback
+        else:
+            lookback_delta = pd.Timedelta(lookback)
+    else:
+        lookback_delta = LOOKBACK
+
     if window is None:
         if troute_config_path is None:
             raise ValueError("Must provide either troute_config_path or window")
         window = read_troute_window(troute_config_path)
 
+    lookback_seconds = max(0.0, lookback_delta.total_seconds())
+    lookback_steps = int(round(lookback_seconds / window.dt))
+    target_start = window.start - pd.Timedelta(seconds=lookback_steps * window.dt)
+
     target_index = pd.date_range(
-        window.start, window.end, freq=pd.Timedelta(seconds=window.dt)
+        target_start, window.end, freq=pd.Timedelta(seconds=window.dt)
     )
 
     id_to_gage = resolve_crosswalk(
@@ -136,7 +160,7 @@ def build_usgs_da_dataframe(
                 reason = _incompleteness_reason(cached, required_ids, target_index)
                 if reason is None:
                     print(
-                        f"{output_path} already covers {window.start} to {window.end} "
+                        f"{output_path} already covers {target_index.min()} to {target_index.max()} "
                         "for all required waterbody ids; skipping USGS fetch"
                     )
                     return cached
@@ -144,13 +168,15 @@ def build_usgs_da_dataframe(
 
     sites = sorted({f"USGS-{gage}" for gage in id_to_gage.values() if gage})
 
-    if 0 < observed_steps < len(target_index):
-        fetch_end = min(target_index[observed_steps - 1] + pad_delta, window.end + pad_delta)
+    if observed_steps > 0:
+        obs_end = window.start + pd.Timedelta(seconds=(observed_steps - 1) * window.dt)
+        fetch_end = min(obs_end + pad_delta, window.end + pad_delta)
     else:
+        obs_end = window.end
         fetch_end = window.end + pad_delta
 
     observations = (
-        fetch_usgs_streamflow(sites, window.start - pad_delta, fetch_end)
+        fetch_usgs_streamflow(sites, target_start - pad_delta, fetch_end)
         if sites
         else pd.DataFrame(columns=["usgs_site_code"])
     )
@@ -166,8 +192,10 @@ def build_usgs_da_dataframe(
     usgs_df.columns = target_index
     usgs_df = usgs_df.sort_index()
 
-    if observed_steps > 0 and usgs_df.shape[1] > observed_steps:
-        usgs_df.iloc[:, observed_steps:] = float("nan")
+    if observed_steps > 0:
+        num_populated = (target_index <= obs_end).sum()
+        if num_populated < usgs_df.shape[1]:
+            usgs_df.iloc[:, num_populated:] = float("nan")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     usgs_df.to_feather(output_path)

@@ -96,6 +96,14 @@ def main(
             "(default: 3.0)."
         ),
     ),
+    lookback_hours: float = typer.Option(
+        1.0,
+        "--lookback-hours",
+        help=(
+            "Hours of data assimilation lookback before simulation start time "
+            "(default: 1.0)."
+        ),
+    ),
 ) -> None:
     """Build a USGS streamflow data-assimilation dataframe for t-route."""
     if ngiab_data_dir is not None:
@@ -153,6 +161,7 @@ def main(
     typer.echo(f"output: {output}")
     typer.echo(f"observed steps: {observed_steps}")
     typer.echo(f"pad hours: {pad_hours}")
+    typer.echo(f"lookback hours: {lookback_hours}")
 
     df = build_usgs_da_dataframe(
         output_path=output,
@@ -162,6 +171,7 @@ def main(
         window=window,
         observed_steps=observed_steps,
         pad_hours=pad_hours,
+        lookback_hours=lookback_hours,
     )
     typer.echo(df)
 
