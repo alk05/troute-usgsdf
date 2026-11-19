@@ -40,7 +40,8 @@ uvx troute-usgsdf \
   --output /path/to/troute_da.feather
 ```
 
-Or use a RouteLink `.nc` file, with an optional mask file:
+Or use a RouteLink `.nc` file, with an optional mask file (`--mask` filters NWM link IDs,
+so it requires `--route-link`; it cannot be used with `--gpkg` alone):
 
 ```bash
 uvx troute-usgsdf \
@@ -65,32 +66,47 @@ uvx troute-usgsdf \
   --output /path/to/troute_da.feather
 ```
 
-`--start` and `--end` accept `"YYYY-MM-DD HH:MM"` strings. `--nts` specifies the number of timesteps, and `--dt` defaults to 300 seconds.
+`--start` and `--end` accept `"YYYY-MM-DD HH:MM"` strings (UTC; timezone-aware ISO strings are converted to UTC). `--end` must be after `--start` by a whole number of `--dt` steps. `--start` needs exactly one of
+`--end` or `--nts` (number of timesteps), and `--dt` defaults to 300 seconds.
+`--troute-config` and `--start` are mutually exclusive: when using `--troute-config`,
+passing any of `--start`, `--end`, `--nts` or `--dt` is an error rather than being ignored.
 
 ### Observation Truncation (`--observed-steps`)
 
-In hindcast and forecast mode, future observations are not known at the time of forecast initialization. By default, `--observed-steps 2` keeps observations for the first two timesteps (five minutes under `dt=300`) and masks subsequent steps with `NaN`.
+By default, observations are kept across the full simulation window.
 
-Pass `--observed-steps 0` to preserve observations across the full simulation window without truncation.
+In forecast mode, future observations are not known at the time of forecast initialization.
+Pass `--observed-steps N` to keep observations only for the first `N` timesteps and set the
+remaining steps to `NaN` (e.g. `--observed-steps 2` keeps the first two timesteps, five
+minutes under `dt=300`).
 
 ### CLI Reference
 
-| Option | Description |
-|---|---|
-| `--ngiab-data-dir PATH` | Path to NGIAB run data directory (automatically derives gpkg, troute config, and output feather). |
-| `--gpkg PATH` | Path to hydrofabric geopackage (optional if `--route-link` is given). |
-| `--route-link PATH` | RouteLink `.nc` file containing NWM link IDs and USGS gages. |
-| `--mask PATH` | Optional text file containing link IDs to filter the domain. |
-| `--troute-config PATH` | Path to t-route `troute.yaml` config (alternative to `--start`). |
-| `--start TEXT` | Simulation start time (`YYYY-MM-DD HH:MM` format). |
-| `--end TEXT` | Simulation end time (paired with `--start`). |
-| `--nts INTEGER` | Number of timesteps (paired with `--start` and `--dt`). |
-| `--dt INTEGER` | Routing/forcing timestep in seconds (default: `300`). |
-| `--output PATH` | Path to write the output `.feather` file. |
-| `--observed-steps INTEGER` | Number of timesteps to keep populated before NaN truncation (default: `2`; `0` keeps full window). |
+Options are grouped in `--help`. Within each group:
+
+- **Preset:** `--ngiab-data-dir` replaces every Domain, Time window and `--output` option; combining them is an error.
+- **Domain:** at least one of `--gpkg` / `--route-link`. `--mask` requires `--route-link`.
+- **Time window:** either `--troute-config`, or `--start` plus exactly one of `--end` / `--nts` (optionally `--dt`).
+- **Output:** `--output` is required unless using the preset; `--observed-steps` is optional.
+
+| Group | Option | Description |
+|---|---|---|
+| Preset | `--ngiab-data-dir PATH` | NGIAB run data directory (derives gpkg, troute config, and output feather). |
+| Domain | `--gpkg PATH` | Hydrofabric geopackage. Alone: rows are flowpath IDs. With `--route-link`: rows are NWM link IDs. |
+| Domain | `--route-link PATH` | RouteLink `.nc` file containing NWM link IDs and USGS gages. |
+| Domain | `--mask PATH` | Text file of NWM link IDs to keep. Requires `--route-link`. |
+| Time window | `--troute-config PATH` | t-route `troute.yaml` (excludes `--start`/`--end`/`--nts`/`--dt`). |
+| Time window | `--start TEXT` | Simulation start time (`YYYY-MM-DD HH:MM`). Requires `--end` or `--nts`. |
+| Time window | `--end TEXT` | Simulation end time. Requires `--start`; excludes `--nts`. |
+| Time window | `--nts INTEGER` | Number of timesteps. Requires `--start`; excludes `--end`. |
+| Time window | `--dt INTEGER` | Timestep in seconds (default: `300`). Requires `--start`. |
+| Output | `--output PATH` | Path to write the output `.feather` file. |
+| Output | `--observed-steps INTEGER` | Keep only the first N timesteps of observations (default: full window). |
 
 ## Output Caching
 
-If `--output` already exists and already contains every required identifier
-and timestamp (and is not all-NaN), it's reused as-is and no USGS data is re-fetched. Otherwise
-the full dataframe is (re)fetched from USGS and the file is overwritten.
+If `--output` already exists, it is reused as-is (no USGS fetch) only when it was built
+for exactly this run: the same ids (after `--mask`), the same time grid, and the same
+`--observed-steps`. These options are stored in the feather's metadata. Otherwise (including
+files written by older versions without that metadata, or all-NaN files) the dataframe is
+refetched from USGS and the file is overwritten.
