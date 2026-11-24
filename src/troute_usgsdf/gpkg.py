@@ -15,10 +15,13 @@ def read_gage_crosswalk(gpkg_path: Path) -> dict[int, str]:
 
 
 def read_gage_crosswalk_nwm(
-    gpkg_path: Path, route_link_nc_path: Path
+    gpkg_path: Path, route_link_nc_path: Path, mask: set[int] | None = None
 ) -> dict[int, tuple[str, int | None]]:
-    """Map flowpath waterbody id -> (USGS gage id, NWM link id) using RouteLink .nc."""
+    """Map flowpath waterbody id -> (USGS gage id, NWM link id) using RouteLink .nc.
+
+    If `mask` is given, only RouteLink links in it are eligible as the NWM link id.
+    """
     wb_to_gage = read_gage_crosswalk(gpkg_path)
-    link_to_gage = read_route_link_gages(route_link_nc_path)
+    link_to_gage = read_route_link_gages(route_link_nc_path, mask=mask)
     gage_to_nwm = {gage: link for link, gage in link_to_gage.items()}
     return {wb: (gage, gage_to_nwm.get(gage)) for wb, gage in wb_to_gage.items()}
